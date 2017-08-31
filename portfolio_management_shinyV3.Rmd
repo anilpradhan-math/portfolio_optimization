@@ -8,7 +8,6 @@ output:
 ---
 
 ```{r setup, message = FALSE}
-
 library(shiny)
 library(zoo)
 library(plotly)
@@ -75,6 +74,54 @@ colnames(returnsx) <- colnames(returns)
 
 #########optimization
 
+R<-returnsx[,1:5]
+
+#print("Getting into Portfolio Optimization")
+
+#print("Data Head:")
+#print(head(R))
+fundnames<-colnames(R)
+
+
+pspec<-portfolio.spec(assets=fundnames)
+
+
+### Constraints
+
+# Weight Sum = 1
+pspec <- add.constraint(portfolio=pspec, type="full_investment")
+pspec <- add.constraint(portfolio = pspec,type = "long_only")
+#pspec <- add.constraint(portfolio=pspec, type="leverage", min_sum=0.99, max_sum=1.01)
+
+#pspec <- add.constraint(portfolio=pspec, type="box", min=0.05, max=0.4)
+# Min = 0, Max = 1 
+#pspec <- add.constraint(portfolio=pspec, type="box")
+
+pspec <- add.constraint(portfolio=pspec, type="return", return_target=0.007)
+pspec <- add.constraint(portfolio=pspec, type="long_only")
+
+### Objectives
+#pspec <- add.objective(portfolio=pspec, type="risk_budget", name="StdDev",arguments=list(p=0.95), max_prisk=0.02)
+pspec <- add.objective(portfolio=pspec, type="risk", name="StdDev",arguments=list(p=0.95))
+pspec <- add.objective(portfolio=pspec, type="return", name="mean")
+
+#print("-----------Portfolio Specifications----------------")
+#print.default(pspec)
+
+### Solver
+
+# The PortfolioAnalytics package currently supports random portfolios, DEoptim, pso, GenSA, and
+# ROI as back ends
+
+opt <- optimize.portfolio(R, portfolio=pspec,optimize_method = "ROI", trace= TRUE)
+#print("-----------Optimization Results----------------")
+#print(opt)
+#chart.RiskReward(opt, risk.col="mean", return.col="StdDev", chart.assets=TRUE)
+#chart.EfficientFrontier(opt, match.col="StdDev", n.portfolios=25, type="l")
+#rr <- Return.portfolio(R, weights = extractWeights(opt))
+#charts.PerformanceSummary(rr)
+
+
 
 
 
@@ -122,6 +169,7 @@ fluidRow(
   column(5,
          numericInput("rfr", "Risk-Free %", .5, min = 0, max = 5, step = .01))
 )
+
 
 individual_stocks <- reactive({
   req(input$stock1)
@@ -172,9 +220,73 @@ nav <- reactive({
   round(nav,2)
 })
 
+#rv <- reactiveValues(optt) 
+
+optimize <- reactive({
+R<-returnsx[,c(input$stock1,input$stock2,input$stock3,input$stock4)]
+fundnames<-colnames(R)
+
+pspec<-portfolio.spec(assets=fundnames)
+
+### Constraints
+
+# Weight Sum = 1
+#pspec <- add.constraint(portfolio=pspec, type="full_investment")
+pspec <- add.constraint(portfolio=pspec, type="leverage", min_sum=0.99, max_sum=1.01)
+
+pspec <- add.constraint(portfolio=pspec, type="box", min=0.05, max=0.4)
+# Min = 0, Max = 1 
+#pspec <- add.constraint(portfolio=pspec, type="box")
+
+pspec <- add.constraint(portfolio=pspec, type="return", return_target=0.03)
+
+### Objectives
+pspec <- add.objective(portfolio=pspec, type="risk_budget", name="StdDev",arguments=list(p=0.95), max_prisk=0.02)
+pspec <- add.objective(portfolio=pspec, type="risk", name="StdDev",arguments=list(p=0.95))
+pspec <- add.objective(portfolio=pspec, type="return", name="mean")
+
+### Solver
+
+# The PortfolioAnalytics package currently supports random portfolios, DEoptim, pso, GenSA, and
+# ROI as back ends
+
+opt <- optimize.portfolio(R, portfolio=pspec,optimize_method = c("DEoptim", "random", "ROI", "pso", "GenSA"),search_size = 2000, trace= TRUE, momentFUN = "set.portfolio.moments")
+
+#chart.RiskReward(opt, risk.col="mean", return.col="StdDev", chart.assets=TRUE)
+#chart.EfficientFrontier(opt, match.col="StdDev", n.portfolios=25, type="l")
+#chart.Weights(opt)
+
+Wts<-extractWeights(opt)
+
+hist(Wts,col=colors,main="Optimized Weights",labels = c(input$stock1,input$stock2,input$stock3,input$stock4),xlab="Stocks", ylab="Weights")
+
+Wts
+
+})
+
 
 ```
 
+Optimized Portfolio
+=====================================  
+ Row {}
+-----------------------------------------------------------------------
+ ```{r}
+renderPlot({
+optimize()
+})
+
+```
+ 
+  Row {}
+-----------------------------------------------------------------------
+ ```{r}
+renderTable( rownames = FALSE, colnames = TRUE,{
+
+optimize()
+})
+
+```
 
 Portfolio Performance
 =====================================  

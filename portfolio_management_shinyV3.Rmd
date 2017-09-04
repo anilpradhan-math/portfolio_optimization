@@ -123,6 +123,12 @@ fluidRow(
          numericInput("rfr", "Risk-Free %", .5, min = 0, max = 5, step = .01))
 )
 
+selectInput("risk_level", "Choose Risk Level:",
+                   c("Low" = 3.5,
+                    "Medium" = 3.0,
+                    "High" = 2.5)
+                    )
+
 individual_stocks <- reactive({
   req(input$stock1)
   year <- input$year
@@ -170,6 +176,74 @@ nav <- reactive({
   p4 <- tail(drecent,1)[input$stock4]*(tail(ajbtc,1)[[2]])
   nav <- (input$w1/100)*p1 + (input$w2/100)*p2 + (input$w3/100)*p3+ (1-(input$w1+input$w2+input$w3)/100)*p4
   round(nav,2)
+})
+
+### Optimize at a risk Level
+
+optimize_at_risk <- reactive({
+R<-returnsx[,c(input$stock1,input$stock2,input$stock3,input$stock4)]
+fundnames<-colnames(R)
+
+pspec<-portfolio.spec(assets=fundnames)
+
+### Constraints
+
+# Weight Sum = 1
+#pspec <- add.constraint(portfolio=pspec, type="full_investment")
+pspec <- add.constraint(portfolio=pspec, type="leverage", min_sum=0.99, max_sum=1.01)
+
+pspec <- add.constraint(portfolio=pspec, type="box", min=0.05, max=0.4)
+# Min = 0, Max = 1 
+#pspec <- add.constraint(portfolio=pspec, type="box")
+
+pspec <- add.constraint(portfolio=pspec, type="return", return_target=0.03)
+
+### Objectives
+pspec <- add.objective(portfolio=pspec, type="risk", name="var", risk_aversion=input$risk_level)
+pspec <- add.objective(portfolio=pspec, type="risk_budget", name="StdDev",arguments=list(p=0.95), max_prisk=0.02)
+pspec <- add.objective(portfolio=pspec, type="risk", name="StdDev",arguments=list(p=0.95))
+pspec <- add.objective(portfolio=pspec, type="return", name="mean")
+
+### Solver
+
+# The PortfolioAnalytics package currently supports random portfolios, DEoptim, pso, GenSA, and
+# ROI as back ends
+
+opt <- optimize.portfolio(R, portfolio=pspec,optimize_method = c("DEoptim", "random", "ROI", "pso", "GenSA"),search_size = 2000, trace= TRUE, momentFUN = "set.portfolio.moments")
+#opt <- optimize.portfolio(R, portfolio=pspec,optimize_method = "random")
+
+
+#chart.RiskReward(opt, risk.col="mean", return.col="StdDev", chart.assets=TRUE)
+#chart.EfficientFrontier(opt, match.col="StdDev", n.portfolios=25, type="l")
+#chart.Weights(opt)
+
+Wts<-extractWeights(opt)
+
+hist(Wts,col=colors,main="Optimized Weights",labels = c(input$stock1,input$stock2,input$stock3,input$stock4),xlab="Stocks", ylab="Weights")
+Rtn<-Return.portfolio(R,Wts)
+plot(Rtn)
+Wts
+
+})
+
+```
+Optimized Portfolio at Customized Risk
+=====================================  
+ Row {}
+-----------------------------------------------------------------------
+ ```{r}
+renderPlot({
+optimize()
+})
+
+```
+ 
+  Row {}
+-----------------------------------------------------------------------
+ ```{r}
+renderTable( rownames = FALSE, colnames = TRUE,{
+
+optimize()
 })
 
 
